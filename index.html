@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Surgical Process Relationship Map</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f4f0;
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #73726c;
+    --color-border-tertiary: rgba(0,0,0,0.12);
+    --color-border-secondary: rgba(0,0,0,0.22);
+    --color-border-primary: rgba(0,0,0,0.35);
+    --color-border-info: #378ADD;
+    --color-background-info: #E6F1FB;
+    --color-text-info: #0C447C;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1c1c1a;
+      --color-background-secondary: #252523;
+      --color-text-primary: #e8e6de;
+      --color-text-secondary: #9c9a92;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+      --color-border-secondary: rgba(255,255,255,0.2);
+      --color-border-primary: rgba(255,255,255,0.35);
+    }
+  }
+
+  html, body { margin: 0; padding: 0; background: var(--color-background-primary); color: var(--color-text-primary); font-family: var(--font-sans); }
+  body { padding: 24px; }
+
+  h1 { font-size: 18px; font-weight: 500; margin: 0 0 4px; color: var(--color-text-primary); }
+  .subtitle { font-size: 13px; color: var(--color-text-secondary); margin: 0 0 16px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+  .filter-btn {
+    font-size: 12px; padding: 4px 10px; border-radius: 99px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary); cursor: pointer; transition: all .15s;
+    font-family: var(--font-sans);
+  }
+  .filter-btn.active { color: var(--color-text-primary); border-color: var(--color-border-primary); background: var(--color-background-secondary); }
+  .filter-btn:hover { background: var(--color-background-secondary); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text-secondary); }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .leg-line { width: 22px; height: 0; }
+
+  .phase-header {
+    display: grid;
+    grid-template-columns: 90px 1fr 1fr 1fr 1fr 1fr;
+    gap: 0;
+    margin-bottom: 8px;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--color-background-primary);
+    padding-bottom: 6px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .phase-col-head {
+    font-size: 11px; font-weight: 500;
+    color: var(--color-text-secondary);
+    padding: 4px 6px;
+    text-align: center;
+  }
+  .phase-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 1fr 1fr 1fr 1fr;
+    gap: 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+  }
+  .swim-label {
+    font-size: 11px; font-weight: 500;
+    color: var(--color-text-secondary);
+    padding: 6px 4px;
+    display: flex; align-items: center; justify-content: flex-end;
+    text-align: right;
+    line-height: 1.3;
+    min-height: 36px;
+  }
+
+  .canvas-wrap { position: relative; overflow: hidden; }
+  svg.edges { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
+  .cell { padding: 3px; min-height: 36px; }
+
+  .node {
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 11px;
+    line-height: 1.3;
+    cursor: pointer;
+    border: 0.5px solid transparent;
+    transition: all .15s;
+    margin-bottom: 3px;
+    position: relative;
+    z-index: 6;
+    font-family: var(--font-sans);
+  }
+  .node:hover { transform: scale(1.03); z-index: 20; }
+  .node.dimmed { opacity: 0.2; }
+  .node.highlighted { box-shadow: 0 0 0 2px #378ADD; }
+
+  .r-surgeon    { background: #EEEDFE; border-color: #AFA9EC; color: #3C3489; }
+  .r-nursing    { background: #E1F5EE; border-color: #5DCAA5; color: #085041; }
+  .r-anesthesia { background: #FAEEDA; border-color: #EF9F27; color: #633806; }
+  .r-support    { background: #E6F1FB; border-color: #85B7EB; color: #0C447C; }
+  .r-admin      { background: #F1EFE8; border-color: #B4B2A9; color: #444441; }
+  .r-supply     { background: #FBEAF0; border-color: #ED93B1; color: #72243E; }
+  .r-patient    { background: #EAF3DE; border-color: #97C459; color: #27500A; }
+
+  @media (prefers-color-scheme: dark) {
+    .r-surgeon    { background: #26215C; border-color: #534AB7; color: #CECBF6; }
+    .r-nursing    { background: #04342C; border-color: #0F6E56; color: #9FE1CB; }
+    .r-anesthesia { background: #412402; border-color: #854F0B; color: #FAC775; }
+    .r-support    { background: #042C53; border-color: #185FA5; color: #B5D4F4; }
+    .r-admin      { background: #2C2C2A; border-color: #5F5E5A; color: #D3D1C7; }
+    .r-supply     { background: #4B1528; border-color: #993556; color: #F4C0D1; }
+    .r-patient    { background: #173404; border-color: #3B6D11; color: #C0DD97; }
+  }
+
+  .detail-panel {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-secondary);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    min-height: 48px;
+    line-height: 1.6;
+    font-family: var(--font-sans);
+  }
+  .detail-panel strong { color: var(--color-text-primary); font-weight: 500; }
+  .detail-panel .rel-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .rel-tag {
+    font-size: 10px; padding: 2px 7px; border-radius: 99px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+  }
+</style>
+</head>
+<body>
+
+<h1>Surgical Process Relationship Map</h1>
+<p class="subtitle">43 roles · 7 swim lanes · 5 phases · 50+ typed relationships. Click any node to explore its connections.</p>
+
+<div class="controls" id="filter-controls">
+  <span style="font-size:11px;color:var(--color-text-secondary);margin-right:2px">Show:</span>
+  <button class="filter-btn active" data-filter="all">All phases</button>
+  <button class="filter-btn" data-filter="pre">Pre-op</button>
+  <button class="filter-btn" data-filter="intra">Intraoperative</button>
+  <button class="filter-btn" data-filter="post">Post-op</button>
+</div>
+
+<div class="legend">
+  <span style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-right:4px">Lanes:</span>
+  <div class="leg-item"><div class="leg-dot" style="background:#7F77DD"></div>Surgical team</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#1D9E75"></div>Nursing &amp; circulating</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#BA7517"></div>Anesthesia</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>Support services</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#888780"></div>Admin &amp; scheduling</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#D4537E"></div>Supply &amp; sterile processing</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#639922"></div>Patient</div>
+</div>
+
+<div class="legend" style="margin-top:-4px">
+  <span style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-right:4px">Edges:</span>
+  <div class="leg-item"><div class="leg-line" style="border-top:2px solid #7F77DD"></div>Commands / directs</div>
+  <div class="leg-item"><div class="leg-line" style="border-top:2px dashed #1D9E75"></div>Communicates</div>
+  <div class="leg-item"><div class="leg-line" style="border-top:2px solid #BA7517"></div>Hands off / transfers</div>
+  <div class="leg-item"><div class="leg-line" style="border-top:2px dotted #888780"></div>Informs / reports</div>
+</div>
+
+<div class="phase-header">
+  <div class="phase-col-head"></div>
+  <div class="phase-col-head" style="border-bottom:2px solid #B5D4F4">📋 Scheduling &amp; Pre-admit</div>
+  <div class="phase-col-head" style="border-bottom:2px solid #9FE1CB">🔬 Pre-op Prep</div>
+  <div class="phase-col-head" style="border-bottom:2px solid #EF9F27">🔪 Intraoperative</div>
+  <div class="phase-col-head" style="border-bottom:2px solid #F4C0D1">🛏 PACU / Recovery</div>
+  <div class="phase-col-head" style="border-bottom:2px solid #C0DD97">📈 Post-op &amp; Discharge</div>
+</div>
+
+<div class="canvas-wrap" id="canvas-wrap">
+  <svg class="edges" id="edge-svg"></svg>
+  <div id="grid"></div>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <em>Click any node to see its relationships across the surgical episode.</em>
+</div>
+
+<script>
+const LANES = [
+  { id: 'surgeon',    label: 'Surgical team',           cls: 'r-surgeon',    color: '#7F77DD' },
+  { id: 'nursing',    label: 'Nursing & circulating',   cls: 'r-nursing',    color: '#1D9E75' },
+  { id: 'anesthesia', label: 'Anesthesia',               cls: 'r-anesthesia', color: '#BA7517' },
+  { id: 'support',    label: 'Support services',         cls: 'r-support',    color: '#378ADD' },
+  { id: 'admin',      label: 'Admin & scheduling',       cls: 'r-admin',      color: '#888780' },
+  { id: 'supply',     label: 'Supply & sterile proc.',   cls: 'r-supply',     color: '#D4537E' },
+  { id: 'patient',    label: 'Patient',                  cls: 'r-patient',    color: '#639922' },
+];
+
+const PHASES = ['sched','preop','intra','pacu','postop'];
+
+const NODES = [
+  { id:'n1',  lane:'surgeon',    phase:'sched', label:'Attending surgeon',         detail:'Reviews case indication, consents patient, schedules with OR coordinator.' },
+  { id:'n2',  lane:'surgeon',    phase:'preop', label:'Surgeon: pre-op review',    detail:'Reviews imaging, labs, H&P. Marks surgical site. Briefs scrub and circulating nurses.' },
+  { id:'n3',  lane:'surgeon',    phase:'intra', label:'Attending surgeon (active)', detail:'Leads the operative field. Directs scrub tech, first assist, residents. Calls for counts.' },
+  { id:'n4',  lane:'surgeon',    phase:'intra', label:'First assistant / resident', detail:'Retracts, sutures, assists as directed by attending.' },
+  { id:'n5',  lane:'surgeon',    phase:'pacu',  label:'Surgeon: PACU check-in',    detail:'Assesses patient post-emergence. Writes orders. Communicates to hospitalist or floor team.' },
+  { id:'n6',  lane:'surgeon',    phase:'postop',label:'Surgeon: follow-up / rounds',detail:'Wound checks, drain management, discharge criteria. Sends operative note.' },
+  { id:'n7',  lane:'nursing',    phase:'sched', label:'OR charge nurse',            detail:'Confirms scheduling, assigns room and team. Coordinates with sterile processing on instrument trays.' },
+  { id:'n8',  lane:'nursing',    phase:'preop', label:'Pre-op admitting nurse',     detail:'Receives patient, verifies consents, starts IV, collects vitals and history. Hands off to circulating.' },
+  { id:'n9',  lane:'nursing',    phase:'preop', label:'Circulating RN',             detail:'Opens sterile supplies, confirms counts with scrub, does surgical timeout with full team.' },
+  { id:'n10', lane:'nursing',    phase:'intra', label:'Circulating RN (active)',    detail:'Documents, retrieves supplies, manages specimens, communicates outside OR, calls pharmacy.' },
+  { id:'n11', lane:'nursing',    phase:'intra', label:'Scrub tech / scrub nurse',   detail:"Maintains sterile field. Passes instruments on surgeon's cue. Performs counts with circulator." },
+  { id:'n12', lane:'nursing',    phase:'pacu',  label:'PACU nurse',                 detail:'Monitors emergence, manages pain, airway, and hemodynamics. Reports to surgeon and floor team.' },
+  { id:'n13', lane:'nursing',    phase:'postop',label:'Floor / ward nurse',         detail:'Ongoing wound, pain, and mobility assessment. Executes discharge teaching.' },
+  { id:'n14', lane:'anesthesia', phase:'sched', label:'Anesthesia coordinator',     detail:'Reviews preanesthesia screening. Flags ASA class concerns to attending anesthesiologist.' },
+  { id:'n15', lane:'anesthesia', phase:'preop', label:'Anesthesiologist pre-op',    detail:'Evaluates airway, reviews history, chooses anesthetic plan. Discusses risks with patient.' },
+  { id:'n16', lane:'anesthesia', phase:'intra', label:'Anesthesiologist / CRNA',    detail:'Induces and maintains anesthesia. Manages airway, hemodynamics, fluid balance, blood products.' },
+  { id:'n17', lane:'anesthesia', phase:'pacu',  label:'Anesthesia: PACU handoff',   detail:'Verbal handoff to PACU nurse: airway events, fluid totals, meds given, emergence concerns.' },
+  { id:'n18', lane:'anesthesia', phase:'postop',label:'Acute pain service',         detail:'Manages epidurals, nerve blocks, PCA. Consults on multimodal pain protocols.' },
+  { id:'n19', lane:'support',    phase:'sched', label:'Radiology',                  detail:'Provides pre-op imaging (CT, MRI, X-ray). Reads and reports to surgeon.' },
+  { id:'n20', lane:'support',    phase:'preop', label:'Lab / pathology (pre)',       detail:'Processes pre-op labs (CBC, BMP, coags, type & screen). Results to EMR.' },
+  { id:'n21', lane:'support',    phase:'intra', label:'Intraoperative radiology',   detail:'Fluoroscopy, C-arm, or frozen section during case as surgeon requests.' },
+  { id:'n22', lane:'support',    phase:'intra', label:'Pathology: frozen section',  detail:'Rapid tissue analysis during case. Results communicated to surgeon within ~20 min.' },
+  { id:'n23', lane:'support',    phase:'intra', label:'Blood bank / transfusion',   detail:'Provides crossmatched products. Responds to massive transfusion protocol activations.' },
+  { id:'n24', lane:'support',    phase:'pacu',  label:'Respiratory therapy',        detail:'Manages ventilator weaning, nebulizers, post-op pulmonary toilet.' },
+  { id:'n25', lane:'support',    phase:'postop',label:'Physical therapy',           detail:'Post-op mobility, strength rehab, discharge planning.' },
+  { id:'n26', lane:'support',    phase:'postop',label:'Social work / case mgmt',    detail:'Discharge planning, home health coordination, insurance navigation.' },
+  { id:'n27', lane:'admin',      phase:'sched', label:'OR scheduling coordinator',  detail:'Books OR time, confirms insurance auth, sends block scheduling to charge nurse.' },
+  { id:'n28', lane:'admin',      phase:'sched', label:'Insurance / prior auth',     detail:'Verifies procedure coverage, obtains authorization before case proceeds.' },
+  { id:'n29', lane:'admin',      phase:'preop', label:'Pre-op testing coordinator', detail:'Orders and tracks pre-op studies. Flags abnormal results to surgeon.' },
+  { id:'n30', lane:'admin',      phase:'intra', label:'OR control desk',            detail:'Tracks room turnover, communicates delays to PACU and floor teams, coordinates transport.' },
+  { id:'n31', lane:'admin',      phase:'pacu',  label:'Bed management',             detail:'Secures floor or ICU bed for patient transfer from PACU.' },
+  { id:'n32', lane:'admin',      phase:'postop',label:'Medical coding / billing',   detail:'Codes operative report, professional and facility charges. Communicates deficiencies to surgeon.' },
+  { id:'n33', lane:'supply',     phase:'sched', label:'Central sterile processing', detail:'Receives instrument trays post-case, decontaminates, inspects, packs, sterilizes (autoclave/EO).' },
+  { id:'n34', lane:'supply',     phase:'preop', label:'CSP: tray delivery',         detail:'Delivers sterile trays and implants to OR suite. Confirms expiration and indicator integrity.' },
+  { id:'n35', lane:'supply',     phase:'intra', label:'Materials / supply chain',   detail:'Maintains par levels of OR supplies, implants, suture. Responds to urgent intraop requests.' },
+  { id:'n36', lane:'supply',     phase:'intra', label:'Implant / vendor rep',       detail:'Provides implants (ortho, spine, cardiac). Present in OR for guidance on system use.' },
+  { id:'n37', lane:'supply',     phase:'pacu',  label:'Linen / housekeeping',       detail:'Cleans and turns over OR suite between cases. Manages soiled linen and waste disposal.' },
+  { id:'n38', lane:'supply',     phase:'postop',label:'Sterile processing (post)',  detail:'Receives soiled instruments from circulator, begins decontamination cycle.' },
+  { id:'n39', lane:'patient',    phase:'sched', label:'Patient: scheduling visit',  detail:'Sees surgeon in clinic. Receives diagnosis, procedure info, consent forms, pre-op instructions.' },
+  { id:'n40', lane:'patient',    phase:'preop', label:'Patient: pre-op holding',    detail:'NPO verified, marked, IV placed, questions answered. Signs consent. Sees anesthesia.' },
+  { id:'n41', lane:'patient',    phase:'intra', label:'Patient: under anesthesia',  detail:'Intraoperative period. Positioned by team. Monitored throughout procedure.' },
+  { id:'n42', lane:'patient',    phase:'pacu',  label:'Patient: recovering',        detail:'Emerges from anesthesia. Pain and nausea managed. Family notified by OR liaison.' },
+  { id:'n43', lane:'patient',    phase:'postop',label:'Patient: discharge / home',  detail:'Receives discharge instructions, medications, follow-up appointment. Transported home.' },
+];
+
+const EDGES = [
+  ['n1','n27','communicate','schedules case'],
+  ['n27','n7','inform','confirms booking'],
+  ['n27','n28','inform','auth request'],
+  ['n28','n27','inform','auth approved'],
+  ['n1','n39','communicate','consents patient'],
+  ['n14','n15','handoff','pre-screening to MD'],
+  ['n29','n2','inform','pre-op results ready'],
+  ['n20','n29','inform','lab results'],
+  ['n19','n2','inform','imaging available'],
+  ['n7','n33','communicate','tray request'],
+  ['n33','n34','handoff','sterile trays delivered'],
+  ['n34','n9','handoff','trays to OR suite'],
+  ['n8','n40','handoff','admits patient'],
+  ['n8','n9','handoff','patient handoff to circulating'],
+  ['n15','n40','communicate','anesthesia pre-eval'],
+  ['n2','n9','communicate','surgical site brief'],
+  ['n9','n11','command','open sterile field'],
+  ['n9','n10','communicate','confirms timeout'],
+  ['n3','n10','command','directs circulating'],
+  ['n3','n11','command','passes instruments'],
+  ['n3','n4','command','directs first assist'],
+  ['n3','n16','communicate','anesthesia collaboration'],
+  ['n16','n41','command','anesthesia management'],
+  ['n10','n22','communicate','sends specimen'],
+  ['n22','n3','inform','frozen section result'],
+  ['n21','n3','inform','intraop imaging result'],
+  ['n10','n23','communicate','blood product request'],
+  ['n23','n16','handoff','products to anesthesia'],
+  ['n35','n10','handoff','urgent supply'],
+  ['n36','n3','communicate','implant guidance'],
+  ['n10','n30','inform','case status'],
+  ['n30','n31','communicate','bed request'],
+  ['n16','n17','handoff','anesthesia handoff'],
+  ['n17','n12','handoff','verbal handoff'],
+  ['n5','n12','communicate','post-op orders'],
+  ['n12','n31','communicate','ready for floor'],
+  ['n31','n13','inform','bed assigned'],
+  ['n12','n24','communicate','vent/resp needs'],
+  ['n37','n30','inform','room turnover done'],
+  ['n11','n38','handoff','soiled instruments'],
+  ['n38','n33','handoff','decontam cycle'],
+  ['n6','n13','communicate','rounds / orders'],
+  ['n13','n43','communicate','discharge teaching'],
+  ['n18','n13','communicate','pain protocol'],
+  ['n25','n43','communicate','mobility / PT'],
+  ['n26','n43','communicate','discharge plan'],
+  ['n6','n32','inform','operative note'],
+  ['n42','n43','handoff','patient recovery to discharge'],
+];
+
+const EDGE_STYLES = {
+  command:     { stroke:'#7F77DD', dash:'', width:1.5 },
+  communicate: { stroke:'#1D9E75', dash:'5,3', width:1.2 },
+  handoff:     { stroke:'#BA7517', dash:'', width:1.5 },
+  inform:      { stroke:'#888780', dash:'2,3', width:1.0 },
+};
+
+let activeFilter = 'all';
+let selectedNode = null;
+
+function phaseVisible(phase) {
+  if (activeFilter === 'all') return true;
+  if (activeFilter === 'pre') return ['sched','preop'].includes(phase);
+  if (activeFilter === 'intra') return phase === 'intra';
+  if (activeFilter === 'post') return ['pacu','postop'].includes(phase);
+  return true;
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  LANES.forEach(lane => {
+    const row = document.createElement('div');
+    row.className = 'phase-row';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'swim-label';
+    lbl.textContent = lane.label;
+    row.appendChild(lbl);
+
+    PHASES.forEach(phase => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if (!phaseVisible(phase)) cell.style.opacity = '0.25';
+
+      NODES.filter(n => n.lane === lane.id && n.phase === phase).forEach(node => {
+        const div = document.createElement('div');
+        div.className = `node ${lane.cls}`;
+        div.id = `node-${node.id}`;
+        div.dataset.nodeId = node.id;
+        div.textContent = node.label;
+        div.title = node.detail;
+        div.addEventListener('click', () => selectNode(node.id));
+        cell.appendChild(div);
+      });
+
+      row.appendChild(cell);
+    });
+
+    grid.appendChild(row);
+  });
+
+  setTimeout(drawEdges, 60);
+}
+
+function selectNode(nodeId) {
+  selectedNode = nodeId === selectedNode ? null : nodeId;
+  updateHighlights();
+  updateDetail();
+}
+
+function updateHighlights() {
+  document.querySelectorAll('.node').forEach(el => el.classList.remove('highlighted','dimmed'));
+  if (!selectedNode) return;
+
+  const connected = new Set([selectedNode]);
+  EDGES.forEach(([a,b]) => {
+    if (a === selectedNode) connected.add(b);
+    if (b === selectedNode) connected.add(a);
+  });
+
+  document.querySelectorAll('.node').forEach(el => {
+    const nid = el.dataset.nodeId;
+    if (connected.has(nid)) el.classList.add('highlighted');
+    else el.classList.add('dimmed');
+  });
+  drawEdges();
+}
+
+function updateDetail() {
+  const panel = document.getElementById('detail-panel');
+  if (!selectedNode) {
+    panel.innerHTML = '<em>Click any node to see its relationships across the surgical episode.</em>';
+    return;
+  }
+  const node = NODES.find(n => n.id === selectedNode);
+  const outgoing = EDGES.filter(([a]) => a === selectedNode);
+  const incoming = EDGES.filter(([,b]) => b === selectedNode);
+
+  const relLines = [];
+  outgoing.forEach(([,b,,lbl]) => {
+    const tgt = NODES.find(n => n.id === b);
+    if (tgt) relLines.push(`<span class="rel-tag">→ ${tgt.label}${lbl ? ': '+lbl : ''}</span>`);
+  });
+  incoming.forEach(([a,,,lbl]) => {
+    const src = NODES.find(n => n.id === a);
+    if (src) relLines.push(`<span class="rel-tag">← ${src.label}${lbl ? ': '+lbl : ''}</span>`);
+  });
+
+  panel.innerHTML = `<strong>${node.label}</strong> — ${node.detail}<div class="rel-tags">${relLines.join('')}</div>`;
+}
+
+function getCenter(nodeId) {
+  const el = document.getElementById(`node-${nodeId}`);
+  if (!el) return null;
+  const wrap = document.getElementById('canvas-wrap');
+  const wr = wrap.getBoundingClientRect();
+  const nr = el.getBoundingClientRect();
+  return {
+    x: nr.left - wr.left + nr.width / 2,
+    y: nr.top - wr.top + nr.height / 2,
+  };
+}
+
+function drawEdges() {
+  const wrap = document.getElementById('canvas-wrap');
+  const svg = document.getElementById('edge-svg');
+  svg.innerHTML = '';
+  svg.setAttribute('width', wrap.offsetWidth);
+  svg.setAttribute('height', wrap.offsetHeight);
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  Object.entries(EDGE_STYLES).forEach(([type, s]) => {
+    const mk = document.createElementNS('http://www.w3.org/2000/svg','marker');
+    mk.setAttribute('id',`arr-${type}`);
+    mk.setAttribute('viewBox','0 0 10 10');
+    mk.setAttribute('refX','8'); mk.setAttribute('refY','5');
+    mk.setAttribute('markerWidth','5'); mk.setAttribute('markerHeight','5');
+    mk.setAttribute('orient','auto-start-reverse');
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d','M2 1L8 5L2 9');
+    p.setAttribute('fill','none');
+    p.setAttribute('stroke', s.stroke);
+    p.setAttribute('stroke-width','1.5');
+    p.setAttribute('stroke-linecap','round');
+    p.setAttribute('stroke-linejoin','round');
+    mk.appendChild(p);
+    defs.appendChild(mk);
+  });
+  svg.appendChild(defs);
+
+  const connected = selectedNode ? new Set() : null;
+  if (selectedNode) {
+    EDGES.forEach(([a,b]) => {
+      if (a === selectedNode || b === selectedNode) { connected.add(a); connected.add(b); }
+    });
+  }
+
+  EDGES.forEach(([a, b, type]) => {
+    const A = getCenter(a);
+    const B = getCenter(b);
+    if (!A || !B) return;
+    const style = EDGE_STYLES[type] || EDGE_STYLES.communicate;
+    const isActive = !selectedNode || (connected.has(a) && connected.has(b));
+    const line = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const mx = (A.x + B.x) / 2;
+    const my = (A.y + B.y) / 2 - 18;
+    line.setAttribute('d', `M${A.x},${A.y} Q${mx},${my} ${B.x},${B.y}`);
+    line.setAttribute('fill','none');
+    line.setAttribute('stroke', style.stroke);
+    line.setAttribute('stroke-width', style.width);
+    if (style.dash) line.setAttribute('stroke-dasharray', style.dash);
+    line.setAttribute('marker-end', `url(#arr-${type})`);
+    line.setAttribute('opacity', isActive ? '0.55' : '0.05');
+    svg.appendChild(line);
+  });
+}
+
+document.getElementById('filter-controls').addEventListener('click', e => {
+  if (!e.target.dataset.filter) return;
+  activeFilter = e.target.dataset.filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
+  selectedNode = null;
+  render();
+  updateDetail();
+});
+
+window.addEventListener('resize', drawEdges);
+render();
+</script>
+</body>
+</html>
